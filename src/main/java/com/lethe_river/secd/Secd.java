@@ -14,17 +14,20 @@ public class Secd {
 	// 仮想機械の全てのメモリ
 	int[] memory = new int[1000];
 
-	Secd(int[] program, int entryPoint) {
-		memory = Arrays.copyOf(program, 1000);
-		c = entryPoint;
-		f = program.length+1;
-	}
-
 	Stack s = new Stack();
 	Stack e = new Stack();
 	int c;
 	Stack d = new Stack();
 	int f;
+
+	final int programArea;
+
+	Secd(int[] program, int entryPoint) {
+		memory = Arrays.copyOf(program, 1000);
+		c = entryPoint;
+		f = program.length+1;
+		programArea = program.length;
+	}
 
 	class Stack {
 		int top;
@@ -243,13 +246,6 @@ public class Secd {
 			return;
 		}
 
-		case DUP: {
-			int val = s.pop();
-			s.push(val);
-			s.push(val);
-			return;
-		}
-
 		default:
 			throw new RuntimeException("inst: "+inst);
 		}
@@ -320,7 +316,7 @@ public class Secd {
 	}
 
 	public String toString(Map<Integer, String> labelName) {
-		return String.format("s: %20s, e: %30s, nextOp: %4s",
+		return String.format("s: %50s, e: %40s, nextOp: %4s",
 				sToString(labelName),
 				eToString(labelName),
 				Opcode.fromBin(memory[c]));
@@ -339,32 +335,32 @@ public class Secd {
 		Program program = new Assembler(
 				INT, VALUE(1).label("ONE"),
 				INT, VALUE(4).label("FOUR"),
-				INT, VALUE(-1).label("M_ONE"),
-				FNP, REF("FRAC").label("FRAC_P"),
+				FNP, REF("FACT").label("FACT_P"),
 				INT, VALUE(0).label("ZERO"),
 				CELL,REF("ZERO").label("ZZ"), REF("ZERO"),
 
 				NIL.label("ENTRY"),
 				LDC, REF("FOUR"),
 				CONS,
-				LDF, REF("FRAC_P"),
+				LDF, REF("FACT_P"),
 				AP,
 				STOP,
-				NIL.label("FRAC"),
+
+				NIL.label("FACT"),
 				LD,  REF("ZZ"),
-				DUP,
 				LDC, REF("ZERO"),
 				EQ,
-				SEL, REF("FRAC_T"), REF("FRAC_F"),
+				SEL, REF("FACT_T"), REF("FACT_F"),
 				RTN,
 
-				LDC.label("FRAC_T"), REF("ONE"),
+				LDC.label("FACT_T"), REF("ONE"),
 				JOIN,
 
-				LDC.label("FRAC_F"), REF("M_ONE"),
-				ADD,
+				LDC.label("FACT_F"), REF("ONE"),
+				LD, REF("ZZ"),
+				SUB,
 				CONS,
-				LDF, REF("FRAC_P"),
+				LDF, REF("FACT_P"),
 				AP,
 				LD,  REF("ZZ"),
 				MUL,
@@ -378,5 +374,6 @@ public class Secd {
 			System.out.println(m.toString(program.labelName));
 			m.step();
 		}
+		System.out.println(Arrays.toString(m.memory));
 	}
 }
