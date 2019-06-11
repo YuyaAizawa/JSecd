@@ -1,26 +1,29 @@
 package com.lethe_river.secd;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.function.IntBinaryOperator;
 import java.util.stream.Collectors;
 
 import static com.lethe_river.secd.Opcode.*;
+import static com.lethe_river.secd.DataHeader.*;
+import static com.lethe_river.secd.Assembler.*;
 
 public class Secd {
-
-	// タグ
-	static final int INT  = 1;
-	static final int CELL = 2;
-	static final int FUNC = 3;
 
 	// 仮想機械の全てのメモリ
 	int[] memory = new int[1000];
 
+	Secd(int[] program) {
+		memory = Arrays.copyOf(program, 1000);
+		f = program.length+1;
+	}
+
 	Stack s = new Stack();
 	Stack e = new Stack();
-	Stack c = new Stack();
+	int c;
 	Stack d = new Stack();
-	int f = 1;
+	int f;
 
 	class Stack {
 		int top;
@@ -30,58 +33,46 @@ public class Secd {
 		}
 
 		int pop() {
-			if(memory[top] != CELL) {
-				throw new RuntimeException();
-			}
-			int ret = memory[top+1];
-			top = memory[top+2];
+			int ret = car(top);
+			top = cdr(top);
 			return ret;
 		}
 	}
 
 	int makeInt(int i) {
-		memory[f++] = INT;
+		memory[f++] = INT.bin;
 		memory[f++] = i;
-		return f - 2;
+		return f - 1;
 	}
 
 	int makeCons(int i, int j) {
-		memory[f++] = CELL;
+		memory[f++] = CELL.bin;
 		memory[f++] = i;
 		memory[f++] = j;
-		return f - 3;
+		return f - 2;
 	}
 
 	int getN(int i) {
-		if(memory[i] != INT) {
-			throw new RuntimeException(""+i);
-		}
-		return memory[i+1];
+		assert getHeader(i) == INT;
+		return memory[i];
 	}
 
 	int getF(int i) {
-		if(memory[i] != FUNC) {
-			throw new RuntimeException(""+i);
-		}
-		return memory[i+1];
+		assert getHeader(i) == FNP;
+		return memory[i];
 	}
 
 	int car(int i) {
-		if(memory[i] != CELL) {
-			throw new RuntimeException();
-		}
-		return memory[i+1];
+		assert getHeader(i) == CELL;
+		return memory[i];
 	}
 
 	int cdr(int i) {
-		if(memory[i] != CELL) {
-			throw new RuntimeException();
-		}
-		return memory[i+2];
+		assert getHeader(i) == CELL;
+		return memory[i+1];
 	}
 
 	int locate(int i, int j) {
-		System.out.println(i+", "+j+", "+e.top);
 		return locatei(i, j, e.top);
 	}
 	int locatei(int i, int j, int env) {
@@ -99,20 +90,20 @@ public class Secd {
 
 	// メモリを破壊的に代入するので注意
 	int rplaca(int x, int y) {
-		if(memory[x] != CELL) {
+		if(memory[x] != CELL.bin) {
 			throw new RuntimeException();
 		}
-		memory[x] = CELL;
+		memory[x] = CELL.bin;
 		memory[x+1] = y;
 		memory[x+2] = cdr(x);
 		return x;
 	}
 
 	void step() {
-		Opcode inst = Opcode.of(c.pop());
+		Opcode inst = Opcode.fromBin(memory[c++]);
 		switch (inst) {
 		case STOP: {
-			c.top = 0;
+			c = -1;
 			return;
 		}
 
@@ -122,27 +113,12 @@ public class Secd {
 		}
 
 		case LDC: {
-			s.push(c.pop());
+			s.push(memory[c++]);
 			return;
 		}
 
 		case LD: {
-//			int work = e.top;
-//			int envindex = getN(car(car(cdr(c.top))));
-//			for (int i = 0; i < envindex; i++) {
-//				work = cdr(work);
-//			}
-//			work = car(work);
-//			envindex = getN(cdr(car(cdr(c.top))));
-//			for (int i = 0; i < envindex; i++) {
-//				work = cdr(work);
-//			}
-//			work = car(work);
-//			s.push(work);
-//			c.pop();
-//			c.pop();
-//			c.pop();
-			int ij = c.pop();
+			int ij = memory[c++];
 			int i = getN(car(ij));
 			int j = getN(cdr(ij));
 			s.push(locate(i, j));
@@ -161,7 +137,7 @@ public class Secd {
 
 		case ATOM: {
 			int result = memory[s.pop()];
-			s.push(result == INT ? 1 : 0);
+			s.push(result == INT.bin ? 1 : 0);
 			return;
 		}
 
@@ -207,20 +183,20 @@ public class Secd {
 
 		case SEL: {
 			boolean cond = getN(s.pop()) != 0;
-			int trueBranch = c.pop();
-			int falseBranch = c.pop();
-			d.push(c.top);
-			c.top = cond ? trueBranch : falseBranch;
+			int trueBranch = memory[c++];
+			int falseBranch = memory[c++];
+			d.push(c);
+			c = cond ? trueBranch : falseBranch;
 			return;
 		}
 
 		case JOIN: {
-			c.top =d.pop();
+			c = d.pop();
 			return;
 		}
 
 		case LDF: {
-			int fn = c.pop();
+			int fn = memory[c++];
 			s.push(makeCons(fn, e.top));
 			return;
 		}
@@ -230,8 +206,8 @@ public class Secd {
 			int env = cdr(fe);
 			int fn = getF(car(fe));
 			int arg = s.pop();
-			d.push(c.top);
-			c.top = fn;
+			d.push(c);
+			c = fn;
 			d.push(e.top);
 			e.top = makeCons(arg, env);
 			d.push(s.top);
@@ -243,7 +219,7 @@ public class Secd {
 			int ret = s.pop();
 			s.top = makeCons(ret, d.pop());
 			e.top = d.pop();
-			c.top = d.pop();
+			c = d.pop();
 			return;
 		}
 
@@ -257,8 +233,8 @@ public class Secd {
 			int func = car(fe);
 			int nenv = cdr(fe);
 			int arg = s.pop();
-			d.push(c.top);
-			c.top = func;
+			d.push(c);
+			c = func;
 			d.push(cdr(e.top));
 			e.top = rplaca(nenv, arg);
 			d.push(s.top);
@@ -278,96 +254,61 @@ public class Secd {
 		}
 	}
 
+	DataHeader getHeader(int adress) {
+		return DataHeader.fromBin(memory[adress - 1]);
+	}
+
 	void run() {
-		while(c.top != 0) {
+		while(c != -1) {
 			step();
 		}
 	}
 
-	String sToString() {
+	String sToString(Map<Integer, String> labelName) {
 		StringBuilder sb = new StringBuilder();
-		printData(s.top, sb);
+		printData(s.top, labelName, false, sb);
 		return sb.toString();
 	}
 
-	String eToString() {
+	String eToString(Map<Integer, String> labelName) {
 		StringBuilder sb = new StringBuilder();
-		printData(e.top, sb);
+		printData(e.top, labelName, false, sb);
 		return sb.toString();
 	}
 
-	String cToString() {
-		StringBuilder sb = new StringBuilder();
-		printProgram(c.top, sb);
-		return sb.toString();
-	}
-
-	String dToString() {
-		StringBuilder sb = new StringBuilder();
-		printProgram(d.top, sb);
-		return sb.toString();
-	}
-
-	void printData(int i, StringBuilder sb) {
-		int kind = memory[i];
-		switch (kind) {
-		case 0:
+	private void printData(int i, Map<Integer, String> labelName, boolean inCdr, StringBuilder sb) {
+		if(i == 0) {
 			sb.append("()");
 			return;
+		}
+		switch (getHeader(i)) {
 		case INT:
-			sb.append(Integer.toString(memory[i+1]));
+			sb.append(Integer.toString(memory[i]));
 			return;
 		case CELL:
-			sb.append("(");
-			printData(car(i), sb);
+			if(!inCdr) {
+				sb.append("(");
+			}
+			printData(car(i), labelName, false, sb);
 			sb.append(" ");
-			printData(cdr(i), sb);
-			sb.append(")");
+			printData(cdr(i), labelName, true, sb);
+			if(!inCdr) {
+				sb.append(")");
+			}
 			return;
-		case FUNC:
-			sb.append("*");
-			sb.append(Integer.toString(memory[i+1]));
+		case FNP:
+			int address = memory[i];
+			String label = labelName.get(address);
+			if(label == null) {
+				sb.append("*");
+				sb.append(Integer.toString(address));
+			} else {
+				sb.append(label);
+			}
 			return;
 		default:
 			throw new RuntimeException();
 		}
-	}
-
-	void printProgram(int i, StringBuilder sb) {
-		int next;
-		try {
-			if(memory[i] == 0) {
-				sb.append("()");
-				return;
-			}
-			if(memory[i] != CELL) {
-				throw new RuntimeException(""+i);
-			}
-			Opcode opcode = Opcode.of(car(i));
-
-			sb.append("(");
-			sb.append(opcode);
-			sb.append(" ");
-
-			next = cdr(i);
-			for(int j = 0;j < opcode.operands;j++) {
-				int car = car(next);
-				int cdr = cdr(next);
-				if(opcode == LDC) {
-					sb.append(getN(car));
-				} else if(opcode == LDF){
-					sb.append(getF(car));
-				} else if(opcode == LD){
-					printData(car, sb);
-				}
-				sb.append(" ");
-				next = cdr;
-			}
-		} catch (RuntimeException e) {
-			throw new RuntimeException(""+i, e);
-		}
-		printProgram(next, sb);
-		sb.append(")");
 	}
 
 	public String memoryDump() {
@@ -377,13 +318,11 @@ public class Secd {
 				.collect(Collectors.joining(","));
 	}
 
-	@Override
-	public String toString() {
-		return String.format("s: %10s, e: %10s, c: %30s, d: %10s",
-				sToString(),
-				eToString(),
-				cToString(),
-				"");
+	public String toString(Map<Integer, String> labelName) {
+		return String.format("s: %50s, e: %40s, nextOp: %4s",
+				sToString(labelName),
+				eToString(labelName),
+				Opcode.fromBin(memory[c]));
 	}
 
 	public static void main(String[] args) {
@@ -396,80 +335,108 @@ public class Secd {
 		 *   fact(4)
 		 */
 
-		Secd m = new Secd();
-		m.memory[ 1] = INT;
-		m.memory[ 2] = 1;
-		m.memory[ 3] = INT;
-		m.memory[ 4] = 4;
-		m.memory[ 5] = INT;
-		m.memory[ 6] = -1;
-		m.memory[ 7] = FUNC;
-		m.memory[ 8] = 0;
-		m.memory[ 9] = INT;
-		m.memory[10] = 0;
-		m.memory[11] = CELL;
-		m.memory[12] = 9;
-		m.memory[13] = 9;
+		Program program = new Assembler(
+				INT, VALUE(1).label("ONE"),
+				INT, VALUE(4).label("FOUR"),
+				INT, VALUE(-1).label("M_ONE"),
+				FNP, REF("FRAC").label("FRAC_P"),
+				INT, VALUE(0).label("ZERO"),
+				CELL,REF("ZERO").label("ZZ"), REF("ZERO"),
 
-		m.f = 14;
+				NIL,
+				LDC, REF("FOUR"),
+				CONS,
+				LDF, REF("FRAC_P"),
+				AP,
+				STOP,
+				NIL.label("FRAC"),
+				LD,  REF("ZZ"),
+				DUP,
+				LDC, REF("ZERO"),
+				EQ,
+				SEL, REF("FRAC_T"), REF("FRAC_F"),
+				RTN,
 
-		int ONE   =  1;
-		int FOUR  =  3;
-		int M_ONE =  5;
-		int ZERO  =  9;
-		int ZZ    = 11;
+				LDC.label("FRAC_T"), REF("ONE"),
+				JOIN,
 
-		int FRAC  =  7;
+				LDC.label("FRAC_F"), REF("M_ONE"),
+				ADD,
+				CONS,
+				LDF, REF("FRAC_P"),
+				AP,
+				LD,  REF("ZZ"),
+				MUL,
+				JOIN
+		).assembl();
 
-		m.c.push(JOIN.bin);
-		m.c.push(MUL.bin);
-		m.c.push(ZZ);
-		m.c.push(LD.bin);
-		m.c.push(AP.bin);
-		m.c.push(FRAC);
-		m.c.push(LDF.bin);
-		m.c.push(CONS.bin);
-		m.c.push(ADD.bin);
-		m.c.push(M_ONE);
-		m.c.push(LDC.bin);
-		int fb = m.c.top;
+		Secd m = new Secd(program.bin);
+//		m.memory[ 1] = INT;
+//		m.memory[ 2] = 1;
+//		int ONE   =  2;
+//		m.memory[ 3] = INT;
+//		m.memory[ 4] = 4;
+//		int FOUR  =  4;
+//		m.memory[ 5] = INT;
+//		m.memory[ 6] = -1;
+//		int M_ONE =  6;
+//		m.memory[ 7] = FNP;
+//		m.memory[ 8] = 0;
+//		int FRAC  =  8;
+//		m.memory[ 9] = INT;
+//		m.memory[10] = 0;
+//		int ZERO  = 10;
+//		m.memory[11] = CELL;
+//		m.memory[12] = ZERO;
+//		m.memory[13] = ZERO;
+//		int ZZ    = 12;
+//
+		m.c = 13;
+//
+//		m.c.push(JOIN.bin);
+//		m.c.push(MUL.bin);
+//		m.c.push(ZZ);
+//		m.c.push(LD.bin);
+//		m.c.push(AP.bin);
+//		m.c.push(FRAC);
+//		m.c.push(LDF.bin);
+//		m.c.push(CONS.bin);
+//		m.c.push(ADD.bin);
+//		m.c.push(M_ONE);
+//		m.c.push(LDC.bin);
+//		int fb = m.c.top;
+//
+//		m.c.push(JOIN.bin);
+//		m.c.push(ONE);
+//		m.c.push(LDC.bin);
+//		int tb = m.c.top;
+//
+//		m.c.push(RTN.bin);
+//		m.c.push(fb);
+//		m.c.push(tb);
+//		m.c.push(SEL.bin);
+//		m.c.push(EQ.bin);
+//		m.c.push(ZERO);
+//		m.c.push(LDC.bin);
+//		m.c.push(DUP.bin);
+//		m.c.push(ZZ);
+//		m.c.push(LD.bin);
+//		m.c.push(NIL.bin);
+//		m.memory[FRAC] = m.c.top;
+//
+//		m.c.push(STOP.bin);
+//		m.c.push(AP.bin);
+//		m.c.push(FRAC);
+//		m.c.push(LDF.bin);
+//		m.c.push(CONS.bin);
+//		m.c.push(FOUR);
+//		m.c.push(LDC.bin);
+//		m.c.push(NIL.bin);
 
-		m.c.push(JOIN.bin);
-		m.c.push(ONE);
-		m.c.push(LDC.bin);
-		int tb = m.c.top;
-
-		m.c.push(RTN.bin);
-		m.c.push(fb);
-		m.c.push(tb);
-		m.c.push(SEL.bin);
-		m.c.push(EQ.bin);
-		m.c.push(ZERO);
-		m.c.push(LDC.bin);
-		m.c.push(DUP.bin);
-		m.c.push(ZZ);
-		m.c.push(LD.bin);
-		m.c.push(NIL.bin);
-		m.memory[FRAC+1] = m.c.top;
-
-		m.c.push(STOP.bin);
-		m.c.push(AP.bin);
-		m.c.push(FRAC);
-		m.c.push(LDF.bin);
-		m.c.push(CONS.bin);
-		m.c.push(FOUR);
-		m.c.push(LDC.bin);
-		m.c.push(NIL.bin);
-
-		System.out.println(m.memoryDump());
-		System.out.println(m.c.top);
-		System.out.println(m);
-		while(m.c.top != 0) {
+		System.out.println(Arrays.toString(program.bin));
+		while(m.c != -1) {
+			System.out.println(m.toString(program.labelName));
 			m.step();
-//			System.out.println(m.memoryDump());
-//			System.out.println(m.c.top);
-//			System.out.println(m.s.top);
-			System.out.println(m);
 		}
 	}
 }
