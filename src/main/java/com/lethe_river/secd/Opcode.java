@@ -1,6 +1,8 @@
 package com.lethe_river.secd;
 
-public enum Opcode {
+import java.util.Map;
+
+public enum Opcode implements AsmElement {
 	// name(opcode, args)
 	STOP ( 0, 0),
 	NIL  ( 1, 0),
@@ -34,7 +36,12 @@ public enum Opcode {
 		this.operands = operands;
 	}
 
-	public static Opcode of(int bin) {
+	public static Opcode fromBin(int bin) {
 		return Opcode.values()[bin];
+	}
+
+	@Override
+	public int bin(Map<String, Integer> map) {
+		return bin;
 	}
 }
