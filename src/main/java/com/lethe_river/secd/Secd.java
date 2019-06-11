@@ -14,8 +14,9 @@ public class Secd {
 	// 仮想機械の全てのメモリ
 	int[] memory = new int[1000];
 
-	Secd(int[] program) {
+	Secd(int[] program, int entryPoint) {
 		memory = Arrays.copyOf(program, 1000);
+		c = entryPoint;
 		f = program.length+1;
 	}
 
@@ -319,7 +320,7 @@ public class Secd {
 	}
 
 	public String toString(Map<Integer, String> labelName) {
-		return String.format("s: %50s, e: %40s, nextOp: %4s",
+		return String.format("s: %20s, e: %30s, nextOp: %4s",
 				sToString(labelName),
 				eToString(labelName),
 				Opcode.fromBin(memory[c]));
@@ -343,7 +344,7 @@ public class Secd {
 				INT, VALUE(0).label("ZERO"),
 				CELL,REF("ZERO").label("ZZ"), REF("ZERO"),
 
-				NIL,
+				NIL.label("ENTRY"),
 				LDC, REF("FOUR"),
 				CONS,
 				LDF, REF("FRAC_P"),
@@ -368,70 +369,9 @@ public class Secd {
 				LD,  REF("ZZ"),
 				MUL,
 				JOIN
-		).assembl();
+		).assembl("ENTRY");
 
-		Secd m = new Secd(program.bin);
-//		m.memory[ 1] = INT;
-//		m.memory[ 2] = 1;
-//		int ONE   =  2;
-//		m.memory[ 3] = INT;
-//		m.memory[ 4] = 4;
-//		int FOUR  =  4;
-//		m.memory[ 5] = INT;
-//		m.memory[ 6] = -1;
-//		int M_ONE =  6;
-//		m.memory[ 7] = FNP;
-//		m.memory[ 8] = 0;
-//		int FRAC  =  8;
-//		m.memory[ 9] = INT;
-//		m.memory[10] = 0;
-//		int ZERO  = 10;
-//		m.memory[11] = CELL;
-//		m.memory[12] = ZERO;
-//		m.memory[13] = ZERO;
-//		int ZZ    = 12;
-//
-		m.c = 13;
-//
-//		m.c.push(JOIN.bin);
-//		m.c.push(MUL.bin);
-//		m.c.push(ZZ);
-//		m.c.push(LD.bin);
-//		m.c.push(AP.bin);
-//		m.c.push(FRAC);
-//		m.c.push(LDF.bin);
-//		m.c.push(CONS.bin);
-//		m.c.push(ADD.bin);
-//		m.c.push(M_ONE);
-//		m.c.push(LDC.bin);
-//		int fb = m.c.top;
-//
-//		m.c.push(JOIN.bin);
-//		m.c.push(ONE);
-//		m.c.push(LDC.bin);
-//		int tb = m.c.top;
-//
-//		m.c.push(RTN.bin);
-//		m.c.push(fb);
-//		m.c.push(tb);
-//		m.c.push(SEL.bin);
-//		m.c.push(EQ.bin);
-//		m.c.push(ZERO);
-//		m.c.push(LDC.bin);
-//		m.c.push(DUP.bin);
-//		m.c.push(ZZ);
-//		m.c.push(LD.bin);
-//		m.c.push(NIL.bin);
-//		m.memory[FRAC] = m.c.top;
-//
-//		m.c.push(STOP.bin);
-//		m.c.push(AP.bin);
-//		m.c.push(FRAC);
-//		m.c.push(LDF.bin);
-//		m.c.push(CONS.bin);
-//		m.c.push(FOUR);
-//		m.c.push(LDC.bin);
-//		m.c.push(NIL.bin);
+		Secd m = new Secd(program.bin, program.entryPoint);
 
 		System.out.println(Arrays.toString(program.bin));
 		while(m.c != -1) {
