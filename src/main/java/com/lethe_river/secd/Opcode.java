@@ -25,8 +25,7 @@ public enum Opcode implements AsmElement {
 	AP   (18, 0),
 	RTN  (19, 0),
 	DUM  (20, 0),
-	RAP  (21, 0),
-	DUP  (22, 0);
+	RAP  (21, 0);
 
 	public final int bin;
 	public final int operands;
