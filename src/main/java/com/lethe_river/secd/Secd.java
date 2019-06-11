@@ -18,22 +18,20 @@ public class Secd {
 	Stack e = new Stack();
 	int c;
 	Stack d = new Stack();
-	int f;
-
-	final int programArea;
+	final Gc gc;
 
 	Secd(int[] program, int entryPoint) {
 		memory = Arrays.copyOf(program, 1000);
 		c = entryPoint;
-		f = program.length+1;
-		programArea = program.length;
+		gc = new Gc(memory, program.length+1);
+		gc.init();
 	}
 
 	class Stack {
 		int top;
 
 		int push(int i) {
-			return top = makeCons(i, top);
+			return top = gc.allocCons(i, top);
 		}
 
 		int pop() {
@@ -41,19 +39,6 @@ public class Secd {
 			top = cdr(top);
 			return ret;
 		}
-	}
-
-	int makeInt(int i) {
-		memory[f++] = INT.bin;
-		memory[f++] = i;
-		return f - 1;
-	}
-
-	int makeCons(int i, int j) {
-		memory[f++] = CELL.bin;
-		memory[f++] = i;
-		memory[f++] = j;
-		return f - 2;
 	}
 
 	int getN(int i) {
@@ -146,42 +131,42 @@ public class Secd {
 		}
 
 		case CONS: {
-			binOp((a, b) -> makeCons(a, b));
+			binOp((a, b) -> gc.allocCons(a, b));
 			return;
 		}
 
 		case EQ: {
-			binOp((a, b) -> makeInt(getN(a) == getN(b) ? 1 : 0));
+			binOp((a, b) -> gc.allocInt(getN(a) == getN(b) ? 1 : 0));
 			return;
 		}
 
 		case LEQ: {
-			binOp((a, b) -> makeInt(getN(a) <= getN(b) ? 1 : 0));
+			binOp((a, b) -> gc.allocInt(getN(a) <= getN(b) ? 1 : 0));
 			return;
 		}
 
 		case ADD: {
-			binOp((a, b) -> makeInt(getN(a) + getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) + getN(b)));
 			return;
 		}
 
 		case SUB: {
-			binOp((a, b) -> makeInt(getN(a) - getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) - getN(b)));
 			return;
 		}
 
 		case MUL: {
-			binOp((a, b) -> makeInt(getN(a) * getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) * getN(b)));
 			return;
 		}
 
 		case DIV: {
-			binOp((a, b) -> makeInt(getN(a) / getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) / getN(b)));
 			return;
 		}
 
 		case REM: {
-			binOp((a, b) -> makeInt(getN(a) % getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) % getN(b)));
 			return;
 		}
 
@@ -201,7 +186,7 @@ public class Secd {
 
 		case LDF: {
 			int fn = memory[c++];
-			s.push(makeCons(fn, e.top));
+			s.push(gc.allocCons(fn, e.top));
 			return;
 		}
 
@@ -213,7 +198,7 @@ public class Secd {
 			d.push(c);
 			c = fn;
 			d.push(e.top);
-			e.top = makeCons(arg, env);
+			e.top = gc.allocCons(arg, env);
 			d.push(s.top);
 			s.top = 0;
 			return;
@@ -221,7 +206,7 @@ public class Secd {
 
 		case RTN: {
 			int ret = s.pop();
-			s.top = makeCons(ret, d.pop());
+			s.top = gc.allocCons(ret, d.pop());
 			e.top = d.pop();
 			c = d.pop();
 			return;

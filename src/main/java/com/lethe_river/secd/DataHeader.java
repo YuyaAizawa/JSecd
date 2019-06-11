@@ -22,6 +22,6 @@ public enum DataHeader implements AsmElement {
 	}
 
 	public static DataHeader fromBin(int bin) {
-		return values()[bin - 1];
+		return values()[(bin & 7) - 1];
 	}
 }
