@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 import com.lethe_river.secd.Secd.Stack;
 
-public class Gc {
+public class MemoryManager {
 	private static final int CELL_SIZE = 3;
 
 	private static final int MARK = 0b1000;
@@ -20,13 +20,13 @@ public class Gc {
 	private int f;
 
 	// 直前にallocしたデータがGCに巻き込まれないように
-	private final int[] guard = new int[3];
+	private final int[] gcGuard = new int[3];
 	private int guardIdx = 0;
 
 	private int marked = 0;
 	private int sweeped = 0;
 
-	Gc(int[] memory, int heapBegin, Stack stack, Stack environment, Stack dump) {
+	MemoryManager(int[] memory, int heapBegin, Stack stack, Stack environment, Stack dump) {
 		this.memory = memory;
 		this.heapBegin = heapBegin;
 		this.stack = stack;
@@ -96,9 +96,9 @@ public class Gc {
 	}
 
 	private void guard(int addr) {
-		guard[guardIdx] = addr;
+		gcGuard[guardIdx] = addr;
 
-		if(++guardIdx == guard.length) {
+		if(++guardIdx == gcGuard.length) {
 			guardIdx = 0;
 		}
 	}
@@ -110,8 +110,8 @@ public class Gc {
 		mark(stack.top);
 		mark(environment.top);
 		mark(dump.top);
-		for (int i = 0; i < guard.length; i++) {
-			mark(guard[i]);
+		for (int i = 0; i < gcGuard.length; i++) {
+			mark(gcGuard[i]);
 		}
 		sweep();
 

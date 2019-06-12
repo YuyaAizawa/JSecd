@@ -18,12 +18,12 @@ public class Secd {
 	Stack e = new Stack();
 	int c;
 	Stack d = new Stack();
-	final Gc gc;
+	final MemoryManager gc;
 
 	Secd(int[] program, int entryPoint, int memorySize) {
 		memory = Arrays.copyOf(program, memorySize);
 		c = entryPoint;
-		gc = new Gc(memory, program.length+1, s, e, d);
+		gc = new MemoryManager(memory, program.length+1, s, e, d);
 		gc.init();
 	}
 
