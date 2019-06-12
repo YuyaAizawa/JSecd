@@ -8,6 +8,8 @@ public enum DataHeader implements AsmElement {
 	CELL ( 2, 2),
 	FNP  ( 3, 1);
 
+	private static final int MASK = 0b111;
+
 	public final int bin;
 	public final int dataSize;
 
@@ -22,6 +24,6 @@ public enum DataHeader implements AsmElement {
 	}
 
 	public static DataHeader fromBin(int bin) {
-		return values()[bin - 1];
+		return values()[(bin & MASK) - 1];
 	}
 }

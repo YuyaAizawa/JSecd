@@ -12,48 +12,27 @@ import static com.lethe_river.secd.Assembler.*;
 public class Secd {
 
 	// 仮想機械の全てのメモリ
-	int[] memory = new int[1000];
+	final int[] memory;
 
 	Stack s = new Stack();
 	Stack e = new Stack();
 	int c;
 	Stack d = new Stack();
-	int f;
+	final Gc gc;
 
-	final int programArea;
-
-	Secd(int[] program, int entryPoint) {
-		memory = Arrays.copyOf(program, 1000);
+	Secd(int[] program, int entryPoint, int memorySize) {
+		memory = Arrays.copyOf(program, memorySize);
 		c = entryPoint;
-		f = program.length+1;
-		programArea = program.length;
+		gc = new Gc(memory, program.length+1, s, e, d);
+		gc.init();
 	}
 
 	class Stack {
 		int top;
 
 		int push(int i) {
-			return top = makeCons(i, top);
+			return top = gc.allocCons(i, top);
 		}
-
-		int pop() {
-			int ret = car(top);
-			top = cdr(top);
-			return ret;
-		}
-	}
-
-	int makeInt(int i) {
-		memory[f++] = INT.bin;
-		memory[f++] = i;
-		return f - 1;
-	}
-
-	int makeCons(int i, int j) {
-		memory[f++] = CELL.bin;
-		memory[f++] = i;
-		memory[f++] = j;
-		return f - 2;
 	}
 
 	int getN(int i) {
@@ -64,6 +43,10 @@ public class Secd {
 	int getF(int i) {
 		assert getHeader(i) == FNP;
 		return memory[i];
+	}
+
+	int cons(int car, int cdr) {
+		return gc.allocCons(car, cdr);
 	}
 
 	int car(int i) {
@@ -87,9 +70,10 @@ public class Secd {
 	}
 
 	int binOp(IntBinaryOperator op) {
-		int a = s.pop();
-		int b = s.pop();
-		return s.push(op.applyAsInt(a, b));
+		int a = car(s.top);
+		int b = car(cdr(s.top));
+		int result = cons(op.applyAsInt(a, b), cdr(cdr(s.top)));
+		return s.top = result;
 	}
 
 	// メモリを破壊的に代入するので注意
@@ -130,100 +114,97 @@ public class Secd {
 		}
 
 		case CAR: {
-			s.push(car(s.pop()));
+			s.top = gc.allocCons(car(car(s.top)), cdr(s.top));
 			return;
 		}
 
 		case CDR: {
-			s.push(cdr(s.pop()));
+			s.top = gc.allocCons(cdr(car(s.top)), cdr(s.top));
 			return;
 		}
 
 		case ATOM: {
-			int result = memory[s.pop()];
-			s.push(result == INT.bin ? 1 : 0);
+			int target = car(s.top);
+			DataHeader type = getHeader(target);
+			s.top = gc.allocCons(type == INT || type == FNP ? 1 : 0, cdr(s.top));
 			return;
 		}
 
 		case CONS: {
-			binOp((a, b) -> makeCons(a, b));
+			binOp((a, b) -> gc.allocCons(a, b));
 			return;
 		}
 
 		case EQ: {
-			binOp((a, b) -> makeInt(getN(a) == getN(b) ? 1 : 0));
+			binOp((a, b) -> gc.allocInt(getN(a) == getN(b) ? 1 : 0));
 			return;
 		}
 
 		case LEQ: {
-			binOp((a, b) -> makeInt(getN(a) <= getN(b) ? 1 : 0));
+			binOp((a, b) -> gc.allocInt(getN(a) <= getN(b) ? 1 : 0));
 			return;
 		}
 
 		case ADD: {
-			binOp((a, b) -> makeInt(getN(a) + getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) + getN(b)));
 			return;
 		}
 
 		case SUB: {
-			binOp((a, b) -> makeInt(getN(a) - getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) - getN(b)));
 			return;
 		}
 
 		case MUL: {
-			binOp((a, b) -> makeInt(getN(a) * getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) * getN(b)));
 			return;
 		}
 
 		case DIV: {
-			binOp((a, b) -> makeInt(getN(a) / getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) / getN(b)));
 			return;
 		}
 
 		case REM: {
-			binOp((a, b) -> makeInt(getN(a) % getN(b)));
+			binOp((a, b) -> gc.allocInt(getN(a) % getN(b)));
 			return;
 		}
 
 		case SEL: {
-			boolean cond = getN(s.pop()) != 0;
+			boolean cond = getN(car(s.top)) != 0;
 			int trueBranch = memory[c++];
 			int falseBranch = memory[c++];
 			d.push(c);
 			c = cond ? trueBranch : falseBranch;
+			s.top = cdr(s.top);
 			return;
 		}
 
 		case JOIN: {
-			c = d.pop();
+			c     = car(d.top);
+			d.top = cdr(d.top);
 			return;
 		}
 
 		case LDF: {
 			int fn = memory[c++];
-			s.push(makeCons(fn, e.top));
+			s.push(gc.allocCons(fn, e.top));
 			return;
 		}
 
 		case AP: {
-			int fe  = s.pop();
-			int env = cdr(fe);
-			int fn = getF(car(fe));
-			int arg = s.pop();
-			d.push(c);
-			c = fn;
-			d.push(e.top);
-			e.top = makeCons(arg, env);
-			d.push(s.top);
+			d.top = cons(cdr(cdr(s.top)), cons(e.top, cons(c, d.top)));
+			e.top = cons(car(cdr(s.top)), cdr(car(s.top)));
+			c     = getF(car(car(s.top)));
 			s.top = 0;
 			return;
 		}
 
 		case RTN: {
-			int ret = s.pop();
-			s.top = makeCons(ret, d.pop());
-			e.top = d.pop();
-			c = d.pop();
+			s.top = cons(car(s.top), car(d.top));
+			e.top = car(cdr(d.top));
+			c     = car(cdr(cdr(d.top)));
+			d.top = cdr(cdr(cdr(d.top)));
 			return;
 		}
 
@@ -233,15 +214,15 @@ public class Secd {
 		}
 
 		case RAP: {
-			int fe = s.pop();
+			int fe = car(s.top);
 			int func = car(fe);
 			int nenv = cdr(fe);
-			int arg = s.pop();
+			int arg = car(cdr(s.top));
 			d.push(c);
 			c = func;
 			d.push(cdr(e.top));
 			e.top = rplaca(nenv, arg);
-			d.push(s.top);
+			d.push(car(cdr(cdr(s.top))));
 			s.top = 0;
 			return;
 		}
@@ -255,9 +236,14 @@ public class Secd {
 		return DataHeader.fromBin(memory[adress - 1]);
 	}
 
-	void run() {
+	public int run() {
 		while(c != -1) {
 			step();
+		}
+		if(getHeader(car(s.top)) == INT) {
+			return getN(car(s.top));
+		} else {
+			return memory[car(s.top)];
 		}
 	}
 
@@ -280,7 +266,7 @@ public class Secd {
 		}
 		switch (getHeader(i)) {
 		case INT:
-			sb.append(Integer.toString(memory[i]));
+			sb.append(Integer.toString(getN(i)));
 			return;
 		case CELL:
 			if(!inCdr) {
@@ -294,7 +280,7 @@ public class Secd {
 			}
 			return;
 		case FNP:
-			int address = memory[i];
+			int address = getF(i);
 			String label = labelName.get(address);
 			if(label == null) {
 				sb.append("*");
@@ -367,7 +353,7 @@ public class Secd {
 				JOIN
 		).assembl("ENTRY");
 
-		Secd m = new Secd(program.bin, program.entryPoint);
+		Secd m = new Secd(program.bin, program.entryPoint, 200);
 
 		System.out.println(Arrays.toString(program.bin));
 		while(m.c != -1) {
